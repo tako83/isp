@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión ISP - Clientes y Pagos</title>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- SheetJS para exportar a Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { background: #f8f9fa; }
+    .card-stat { border-left: 4px solid #0d6efd; }
+    .table th { white-space: nowrap; }
+    .img-thumb { max-width: 60px; max-height: 60px; cursor: pointer; border-radius: 4px; }
+    .modal-img { max-width: 100%; max-height: 80vh; }
+    .tab-content { background: #fff; padding: 1.5rem; border-radius: 0 0 .5rem .5rem; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <h1 class="mb-4 text-primary">📡 Gestión de Clientes y Pagos ISP</h1>
+
+    <!-- Pestañas -->
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-clientes" data-bs-toggle="tab" data-bs-target="#content-clientes" type="button" role="tab">👥 Clientes</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-pagos" data-bs-toggle="tab" data-bs-target="#content-pagos" type="button" role="tab">💳 Pagos</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-resumen" data-bs-toggle="tab" data-bs-target="#content-resumen" type="button" role="tab">📊 Resumen</button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="mainTabsContent">
+      <!-- ========== CLIENTES ========== -->
+      <div class="tab-pane fade show active" id="content-clientes" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Lista de Clientes</h4>
+          <div>
+            <button class="btn btn-success me-2" onclick="abrirModalCliente()">➕ Nuevo Cliente</button>
+            <button class="btn btn-outline-primary" onclick="exportarClientesExcel()">📥 Exportar a Excel</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <input type="text" id="buscarCliente" class="form-control" placeholder="🔍 Buscar por nombre, teléfono o plan..." oninput="renderClientes()">
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered align-middle" id="tablaClientes">
+            <thead class="table-primary">
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Plan</th>
+                <th>Fecha Inicio</th>
+                <th>Total Pagado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyClientes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== PAGOS ========== -->
+      <div class="tab-pane fade" id="content-pagos" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Registrar Pago</h4>
+          <button class="btn btn-outline-primary" onclick="exportarPagosExcel()">📥 Exportar Pagos a Excel</button>
+        </div>
+        <form id="formPago" class="row g-3 mb-4" onsubmit="guardarPago(event)">
+          <div class="col-md-4">
+            <label class="form-label">Cliente</label>
+            <select class="form-select" id="pagoCliente" required></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Tipo de Pago</label>
+            <select class="form-select" id="pagoTipo" required>
+              <option value="Servicio">Servicio</option>
+              <option value="Equipo">Equipo</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Monto (Q)</label>
+            <input type="number" step="0.01" class="form-control" id="pagoMonto" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Fecha de Pago</label>
+            <input type="date" class="form-control" id="pagoFecha" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Comprobante (Imagen)</label>
+            <input type="file" class="form-control" id="pagoImagen" accept="image/*">
+          </div>
+          <div class="col-md-6 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">💾 Guardar Pago</button>
+          </div>
+        </form>
+
+        <h5>Historial de Pagos</h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered" id="tablaPagos">
+            <thead class="table-secondary">
+              <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Tipo</th>
+                <th>Monto</th>
+                <th>Fecha</th>
+                <th>Comprobante</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPagos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== RESUMEN ========== -->
+      <div class="tab-pane fade" id="content-resumen" role="tabpanel">
+        <h4 class="mb-3">Resumen General</h4>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card card-stat p-3">
+              <h6 class="text-muted">Total Clientes</h6>
+              <h3 id="statTotalClientes">0</h3>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card card-stat p-3">
+              <h6 class="text-muted">Ingresos Totales</h6>
+              <h3 id="statIngresosTotales">Q 0.00</h3>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card card-stat p-3">
+              <h6 class="text-muted">Pagos Registrados</h6>
+              <h3 id="statTotalPagos">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MODAL CLIENTE ========== -->
+  <div class="modal fade" id="modalCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form id="formCliente" onsubmit="guardarCliente(event)">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalClienteTitulo">Nuevo Cliente</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="clienteId">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Nombre completo *</label>
+                <input type="text" class="form-control" id="clienteNombre" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Teléfono</label>
+                <input type="text" class="form-control" id="clienteTelefono">
+              </div>
+              <div class="col-md-12">
+                <label class="form-label">Dirección</label>
+                <input type="text" class="form-control" id="clienteDireccion">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Plan asignado</label>
+                <input type="text" class="form-control" id="clientePlan" placeholder="Ej: 10 Mbps">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Precio del Plan (Q)</label>
+                <input type="number" step="0.01" class="form-control" id="clientePrecioPlan">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Fecha de inicio de servicio</label>
+                <input type="date" class="form-control" id="clienteFechaInicio">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Estado</label>
+                <select class="form-select" id="clienteEstado">
+                  <option value="Activo">Activo</option>
+                  <option value="Suspendido">Suspendido</option>
+                  <option value="Cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Notas</label>
+                <textarea class="form-control" id="clienteNotas" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Cliente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MODAL FICHA CLIENTE ========== -->
+  <div class="modal fade" id="modalFicha" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title" id="fichaTitulo">Ficha del Cliente</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="fichaContenido"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MODAL IMAGEN ========== -->
+  <div class="modal fade" id="modalImagen" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Comprobante de Pago</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="imagenGrande" class="modal-img" src="" alt="Comprobante">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // ============================================================
+    // 1. CONFIGURACIÓN DE INDEXEDDB
+    // ============================================================
+    const DB_NAME = 'ISP_GestionDB';
+    const DB_VERSION = 1;
+    let db;
+
+    function abrirDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db = request.result;
+          resolve(db);
+        };
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          // Almacén de clientes
+          if (!db.objectStoreNames.contains('clientes')) {
+            const storeClientes = db.createObjectStore('clientes', { keyPath: 'id', autoIncrement: true });
+            storeClientes.createIndex('nombre', 'nombre', { unique: false });
+          }
+          // Almacén de pagos
+          if (!db.objectStoreNames.contains('pagos')) {
+            const storePagos = db.createObjectStore('pagos', { keyPath: 'id', autoIncrement: true });
+            storePagos.createIndex('clienteId', 'clienteId', { unique: false });
+          }
+        };
+      });
+    }
+
+    // Utilidades para IndexedDB
+    function agregar(storeName, data) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const request = store.add(data);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function actualizar(storeName, data) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const request = store.put(data);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function obtenerTodos(storeName) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function obtenerPorId(storeName, id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function eliminar(storeName, id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    // ============================================================
+    // 2. ESTADO GLOBAL
+    // ============================================================
+    let clientesCache = [];
+    let pagosCache = [];
+
+    // ============================================================
+    // 3. FUNCIONES DE RENDERIZADO
+    // ============================================================
+    async function cargarDatos() {
+      clientesCache = await obtenerTodos('clientes');
+      pagosCache = await obtenerTodos('pagos');
+      renderClientes();
+      renderPagos();
+      renderResumen();
+      llenarSelectClientes();
+    }
+
+    function renderClientes() {
+      const filtro = document.getElementById('buscarCliente').value.toLowerCase();
+      const tbody = document.getElementById('tbodyClientes');
+      tbody.innerHTML = '';
+      const filtrados = clientesCache.filter(c =>
+        c.nombre.toLowerCase().includes(filtro) ||
+        (c.telefono && c.telefono.toLowerCase().includes(filtro)) ||
+        (c.plan && c.plan.toLowerCase().includes(filtro))
+      );
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay clientes registrados</td></tr>';
+        return;
+      }
+      filtrados.forEach(c => {
+        const totalPagado = pagosCache
+          .filter(p => p.clienteId === c.id)
+          .reduce((sum, p) => sum + (p.monto || 0), 0);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${c.id}</td>
+          <td>${c.nombre}</td>
+          <td>${c.telefono || '-'}</td>
+          <td>${c.plan || '-'}</td>
+          <td>${c.fechaInicio || '-'}</td>
+          <td>Q ${totalPagado.toFixed(2)}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-info" onclick="verFicha(${c.id})">📋 Ficha</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="abrirModalCliente(${c.id})">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="borrarCliente(${c.id})">🗑️</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderPagos() {
+      const tbody = document.getElementById('tbodyPagos');
+      tbody.innerHTML = '';
+      if (pagosCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay pagos registrados</td></tr>';
+        return;
+      }
+      // Ordenar por fecha descendente
+      const ordenados = [...pagosCache].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      ordenados.forEach(p => {
+        const cliente = clientesCache.find(c => c.id === p.clienteId);
+        const nombreCliente = cliente ? cliente.nombre : 'Cliente eliminado';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.id}</td>
+          <td>${nombreCliente}</td>
+          <td>${p.tipo}</td>
+          <td>Q ${p.monto.toFixed(2)}</td>
+          <td>${p.fecha}</td>
+          <td>${p.imagen ? `<img src="${p.imagen}" class="img-thumb" onclick="verImagen('${p.imagen}')">` : 'Sin imagen'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderResumen() {
+      document.getElementById('statTotalClientes').textContent = clientesCache.length;
+      const totalIngresos = pagosCache.reduce((sum, p) => sum + (p.monto || 0), 0);
+      document.getElementById('statIngresosTotales').textContent = `Q ${totalIngresos.toFixed(2)}`;
+      document.getElementById('statTotalPagos').textContent = pagosCache.length;
+    }
+
+    function llenarSelectClientes() {
+      const select = document.getElementById('pagoCliente');
+      select.innerHTML = '<option value="">-- Seleccionar cliente --</option>';
+      clientesCache.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = `${c.nombre} (${c.plan || 'Sin plan'})`;
+        select.appendChild(option);
+      });
+    }
+
+    // ============================================================
+    // 4. GESTIÓN DE CLIENTES
+    // ============================================================
+    function abrirModalCliente(id = null) {
+      const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
+      const titulo = document.getElementById('modalClienteTitulo');
+      const form = document.getElementById('formCliente');
+      form.reset();
+      document.getElementById('clienteId').value = '';
+
+      if (id) {
+        titulo.textContent = 'Editar Cliente';
+        obtenerPorId('clientes', id).then(c => {
+          if (!c) return;
+          document.getElementById('clienteId').value = c.id;
+          document.getElementById('clienteNombre').value = c.nombre || '';
+          document.getElementById('clienteTelefono').value = c.telefono || '';
+          document.getElementById('clienteDireccion').value = c.direccion || '';
+          document.getElementById('clientePlan').value = c.plan || '';
+          document.getElementById('clientePrecioPlan').value = c.precioPlan || '';
+          document.getElementById('clienteFechaInicio').value = c.fechaInicio || '';
+          document.getElementById('clienteEstado').value = c.estado || 'Activo';
+          document.getElementById('clienteNotas').value = c.notas || '';
+        });
+      } else {
+        titulo.textContent = 'Nuevo Cliente';
+      }
+      modal.show();
+    }
+
+    async function guardarCliente(e) {
+      e.preventDefault();
+      const id = document.getElementById('clienteId').value;
+      const cliente = {
+        nombre: document.getElementById('clienteNombre').value.trim(),
+        telefono: document.getElementById('clienteTelefono').value.trim(),
+        direccion: document.getElementById('clienteDireccion').value.trim(),
+        plan: document.getElementById('clientePlan').value.trim(),
+        precioPlan: parseFloat(document.getElementById('clientePrecioPlan').value) || 0,
+        fechaInicio: document.getElementById('clienteFechaInicio').value,
+        estado: document.getElementById('clienteEstado').value,
+        notas: document.getElementById('clienteNotas').value.trim()
+      };
+
+      if (id) {
+        cliente.id = parseInt(id);
+        await actualizar('clientes', cliente);
+      } else {
+        await agregar('clientes', cliente);
+      }
+      bootstrap.Modal.getInstance(document.getElementById('modalCliente')).hide();
+      await cargarDatos();
+    }
+
+    async function borrarCliente(id) {
+      if (!confirm('¿Eliminar este cliente? También se eliminarán sus pagos asociados.')) return;
+      await eliminar('clientes', id);
+      // Eliminar pagos asociados
+      const pagosAsociados = pagosCache.filter(p => p.clienteId === id);
+      for (const p of pagosAsociados) {
+        await eliminar('pagos', p.id);
+      }
+      await cargarDatos();
+    }
+
+    // ============================================================
+    // 5. FICHA COMPLETA DEL CLIENTE
+    // ============================================================
+    async function verFicha(id) {
+      const cliente = await obtenerPorId('clientes', id);
+      if (!cliente) return;
+      const pagosCliente = pagosCache.filter(p => p.clienteId === id);
+      const totalPagado = pagosCliente.reduce((sum, p) => sum + p.monto, 0);
+
+      const modal = new bootstrap.Modal(document.getElementById('modalFicha'));
+      document.getElementById('fichaTitulo').textContent = `Ficha: ${cliente.nombre}`;
+      const cont = document.getElementById('fichaContenido');
+      cont.innerHTML = `
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p><strong>Nombre:</strong> ${cliente.nombre}</p>
+            <p><strong>Teléfono:</strong> ${cliente.telefono || '-'}</p>
+            <p><strong>Dirección:</strong> ${cliente.direccion || '-'}</p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>Plan:</strong> ${cliente.plan || '-'} (Q ${cliente.precioPlan.toFixed(2)})</p>
+            <p><strong>Inicio de servicio:</strong> ${cliente.fechaInicio || '-'}</p>
+            <p><strong>Estado:</strong> <span class="badge bg-${cliente.estado === 'Activo' ? 'success' : cliente.estado === 'Suspendido' ? 'warning' : 'danger'}">${cliente.estado}</span></p>
+          </div>
+          <div class="col-12">
+            <p><strong>Notas:</strong> ${cliente.notas || 'Sin notas'}</p>
+          </div>
+        </div>
+        <hr>
+        <h6>💰 Total pagado: <span class="text-success">Q ${totalPagado.toFixed(2)}</span></h6>
+        <h6>📄 Historial de Pagos (${pagosCliente.length})</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead class="table-light">
+              <tr><th>ID</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th>Comprobante</th></tr>
+            </thead>
+            <tbody>
+              ${pagosCliente.length === 0 ? '<tr><td colspan="5" class="text-center text-muted">Sin pagos registrados</td></tr>' :
+                pagosCliente.map(p => `
+                  <tr>
+                    <td>${p.id}</td>
+                    <td>${p.tipo}</td>
+                    <td>Q ${p.monto.toFixed(2)}</td>
+                    <td>${p.fecha}</td>
+                    <td>${p.imagen ? `<img src="${p.imagen}" class="img-thumb" onclick="verImagen('${p.imagen}')">` : 'Sin imagen'}</td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      modal.show();
+    }
+
+    // ============================================================
+    // 6. GESTIÓN DE PAGOS
+    // ============================================================
+    async function guardarPago(e) {
+      e.preventDefault();
+      const clienteId = parseInt(document.getElementById('pagoCliente').value);
+      if (!clienteId) return alert('Selecciona un cliente');
+
+      const tipo = document.getElementById('pagoTipo').value;
+      const monto = parseFloat(document.getElementById('pagoMonto').value);
+      const fecha = document.getElementById('pagoFecha').value;
+      const fileInput = document.getElementById('pagoImagen');
+
+      let imagenDataUrl = null;
+      if (fileInput.files.length > 0) {
+        imagenDataUrl = await leerArchivoComoDataURL(fileInput.files[0]);
+      }
+
+      const pago = {
+        clienteId,
+        tipo,
+        monto,
+        fecha,
+        imagen: imagenDataUrl
+      };
+
+      await agregar('pagos', pago);
+      document.getElementById('formPago').reset();
+      document.getElementById('pagoFecha').valueAsDate = new Date();
+      await cargarDatos();
+      alert('✅ Pago registrado correctamente');
+    }
+
+    function leerArchivoComoDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ============================================================
+    // 7. VISOR DE IMAGEN
+    // ============================================================
+    function verImagen(dataUrl) {
+      document.getElementById('imagenGrande').src = dataUrl;
+      new bootstrap.Modal(document.getElementById('modalImagen')).show();
+    }
+
+    // ============================================================
+    // 8. EXPORTACIÓN A EXCEL (SheetJS)
+    // ============================================================
+    function exportarClientesExcel() {
+      const tabla = document.getElementById('tablaClientes');
+      // Añadir columna "Total Pagado" que no está en la tabla original
+      const wb = XLSX.utils.table_to_book(tabla, { sheet: 'Clientes' });
+      XLSX.writeFile(wb, 'clientes_isp.xlsx');
+    }
+
+    function exportarPagosExcel() {
+      const tabla = document.getElementById('tablaPagos');
+      const wb = XLSX.utils.table_to_book(tabla, { sheet: 'Pagos' });
+      XLSX.writeFile(wb, 'pagos_isp.xlsx');
+    }
+
+    // ============================================================
+    // 9. INICIALIZACIÓN
+    // ============================================================
+    (async function init() {
+      await abrirDB();
+      await cargarDatos();
+      // Poner fecha de hoy por defecto en el formulario de pago
+      document.getElementById('pagoFecha').valueAsDate = new Date();
+    })();
+  </script>
+</body>
+</html>
